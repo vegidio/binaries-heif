@@ -1,0 +1,54 @@
+name: "windows-amd64"
+
+runs:
+  using: composite
+  steps:
+    - name: Code checkout
+      uses: actions/checkout@v4
+
+    - name: Install NASM
+      uses: ilammy/setup-nasm@v1
+
+    - name: Install MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        install: |
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-make
+
+    - name: Install vcpkg
+      shell: bash
+      run: |
+        mkdir -p $GITHUB_WORKSPACE/local_amd64/lib
+        git clone https://github.com/microsoft/vcpkg builder
+        ./builder/bootstrap-vcpkg.sh
+        cp vcpkg/windows-amd64-static.cmake builder/triplets/community
+
+    - name: Build libheif
+      shell: bash
+      run: |
+        ./builder/vcpkg install "libheif:windows-amd64-static"
+
+    - name: Prepare dependencies
+      shell: bash
+      run: |
+        cp -r $GITHUB_WORKSPACE/builder/installed/windows-amd64-static/include $GITHUB_WORKSPACE/local_amd64/
+        for file in "$GITHUB_WORKSPACE"/builder/installed/windows-amd64-static/lib/*.a; do
+          cp "$file" "$GITHUB_WORKSPACE/local_amd64/lib/"
+        done
+        
+        rm $GITHUB_WORKSPACE/local_amd64/lib/libpng.a
+
+    - name: Zip local
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/local_amd64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/local_windows_amd64.zip include lib
+
+    - name: Save artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries-windows-amd64
+        path: "*.zip"

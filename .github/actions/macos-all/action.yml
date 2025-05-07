@@ -1,0 +1,54 @@
+name: "macos-all"
+
+runs:
+  using: composite
+  steps:
+    - name: Code checkout
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        brew install nasm
+        mkdir -p $GITHUB_WORKSPACE/local_amd64/lib
+        mkdir -p $GITHUB_WORKSPACE/local_arm64/lib
+
+    - name: Install vcpkg
+      shell: bash
+      run: |
+        git clone https://github.com/microsoft/vcpkg builder
+        ./builder/bootstrap-vcpkg.sh
+        cp vcpkg/darwin-amd64-static.cmake builder/triplets/community
+        cp vcpkg/darwin-arm64-static.cmake builder/triplets/community
+
+    - name: Build libheif
+      shell: bash
+      run: |
+        ./builder/vcpkg install "libheif:darwin-amd64-static"
+        ./builder/vcpkg install "libheif:darwin-arm64-static"
+
+    - name: Prepare dependencies
+      shell: bash
+      run: |
+        cp -r $GITHUB_WORKSPACE/builder/installed/darwin-amd64-static/include $GITHUB_WORKSPACE/local_amd64/include
+        cp $GITHUB_WORKSPACE/builder/installed/darwin-amd64-static/lib/*.a $GITHUB_WORKSPACE/local_amd64/lib
+        rm $GITHUB_WORKSPACE/local_amd64/lib/libpng.a
+        
+        cp -r $GITHUB_WORKSPACE/builder/installed/darwin-arm64-static/include $GITHUB_WORKSPACE/local_arm64/include
+        cp $GITHUB_WORKSPACE/builder/installed/darwin-arm64-static/lib/*.a $GITHUB_WORKSPACE/local_arm64/lib
+        rm $GITHUB_WORKSPACE/local_arm64/lib/libpng.a
+
+    - name: Zip local
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/local_amd64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/local_darwin_amd64.zip include lib
+        
+        cd $GITHUB_WORKSPACE/local_arm64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/local_darwin_arm64.zip include lib
+
+    - name: Save artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries-darwin
+        path: "*.zip"
