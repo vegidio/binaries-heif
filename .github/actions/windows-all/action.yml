@@ -29,7 +29,7 @@ runs:
     - name: Build libheif
       shell: bash
       run: |
-        ./builder/vcpkg install "libheif:windows-amd64-static"
+        ./builder/vcpkg install "libheif[hevc]:windows-amd64-static"
 
     - name: Prepare dependencies
       shell: bash
@@ -38,8 +38,6 @@ runs:
         for file in "$GITHUB_WORKSPACE"/builder/installed/windows-amd64-static/lib/*.a; do
           cp "$file" "$GITHUB_WORKSPACE/local_amd64/lib/"
         done
-        
-        rm $GITHUB_WORKSPACE/local_amd64/lib/libpng.a
 
     - name: Zip local
       shell: bash

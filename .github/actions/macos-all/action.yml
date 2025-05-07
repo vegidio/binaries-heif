@@ -10,6 +10,10 @@ runs:
       shell: bash
       run: |
         brew install nasm
+        
+        # Uninstalling jpeg-turbo to avoid conflicts with libheif's implementation of jpeg-turbo 
+        brew uninstall --ignore-dependencies jpeg-turbo
+        
         mkdir -p $GITHUB_WORKSPACE/local_amd64/lib
         mkdir -p $GITHUB_WORKSPACE/local_arm64/lib
 
@@ -24,19 +28,17 @@ runs:
     - name: Build libheif
       shell: bash
       run: |
-        ./builder/vcpkg install "libheif:darwin-amd64-static"
-        ./builder/vcpkg install "libheif:darwin-arm64-static"
+        ./builder/vcpkg install "libheif[hevc]:darwin-amd64-static"
+        ./builder/vcpkg install "libheif[hevc]:darwin-arm64-static"
 
     - name: Prepare dependencies
       shell: bash
       run: |
         cp -r $GITHUB_WORKSPACE/builder/installed/darwin-amd64-static/include $GITHUB_WORKSPACE/local_amd64/include
         cp $GITHUB_WORKSPACE/builder/installed/darwin-amd64-static/lib/*.a $GITHUB_WORKSPACE/local_amd64/lib
-        rm $GITHUB_WORKSPACE/local_amd64/lib/libpng.a
         
         cp -r $GITHUB_WORKSPACE/builder/installed/darwin-arm64-static/include $GITHUB_WORKSPACE/local_arm64/include
         cp $GITHUB_WORKSPACE/builder/installed/darwin-arm64-static/lib/*.a $GITHUB_WORKSPACE/local_arm64/lib
-        rm $GITHUB_WORKSPACE/local_arm64/lib/libpng.a
 
     - name: Zip local
       shell: bash

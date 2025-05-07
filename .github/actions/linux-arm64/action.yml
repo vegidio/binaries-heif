@@ -22,14 +22,13 @@ runs:
     - name: Build libheif
       shell: bash
       run: |
-        ./builder/vcpkg install "libheif:linux-arm64-static"
+        ./builder/vcpkg install "libheif[hevc]:linux-arm64-static"
 
     - name: Prepare dependencies
       shell: bash
       run: |
         cp -r $GITHUB_WORKSPACE/builder/installed/linux-arm64-static/include $GITHUB_WORKSPACE/local_arm64/include
         cp $GITHUB_WORKSPACE/builder/installed/linux-arm64-static/lib/*.a $GITHUB_WORKSPACE/local_arm64/lib/
-        rm $GITHUB_WORKSPACE/local_arm64/lib/libpng.a
 
     - name: Zip local
       shell: bash
