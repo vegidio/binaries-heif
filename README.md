@@ -1,6 +1,6 @@
 # static-heif
 
-A repository with static binaries for libheif.
+A repository with static binaries for libheif with HEVC support.
 
 It supports macOS (x86_64 & arm64), Linux (x86_64 & arm64) and Windows (x86_64).
 
