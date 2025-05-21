@@ -10,31 +10,38 @@ runs:
       shell: bash
       run: |
         sudo apt-get install nasm
-        mkdir -p $GITHUB_WORKSPACE/local_arm64/lib
+        mkdir -p $GITHUB_WORKSPACE/static_arm64/lib
+        mkdir -p $GITHUB_WORKSPACE/dynamic_arm64/lib
 
     - name: Install vcpkg
       shell: bash
       run: |
         git clone https://github.com/microsoft/vcpkg builder
         ./builder/bootstrap-vcpkg.sh
-        cp vcpkg/linux-arm64-static.cmake builder/triplets/community
 
     - name: Build libheif
       shell: bash
       run: |
-        ./builder/vcpkg install "libheif[hevc]:linux-arm64-static"
+        ./builder/vcpkg install "libheif[hevc]:arm64-linux"
+        ./builder/vcpkg install "libheif[hevc]:arm64-linux-dynamic"
 
     - name: Prepare dependencies
       shell: bash
       run: |
-        cp -r $GITHUB_WORKSPACE/builder/installed/linux-arm64-static/include $GITHUB_WORKSPACE/local_arm64/include
-        cp $GITHUB_WORKSPACE/builder/installed/linux-arm64-static/lib/*.a $GITHUB_WORKSPACE/local_arm64/lib/
+        cp -r $GITHUB_WORKSPACE/builder/installed/arm64-linux/include $GITHUB_WORKSPACE/static_arm64/include
+        cp $GITHUB_WORKSPACE/builder/installed/arm64-linux/lib/*.a $GITHUB_WORKSPACE/static_arm64/lib/
+        
+        cp -r $GITHUB_WORKSPACE/builder/installed/arm64-linux-dynamic/include $GITHUB_WORKSPACE/dynamic_arm64/include
+        cp $GITHUB_WORKSPACE/builder/installed/arm64-linux-dynamic/lib/*.so $GITHUB_WORKSPACE/dynamic_arm64/lib/
 
     - name: Zip local
       shell: bash
       run: |
-        cd $GITHUB_WORKSPACE/local_arm64
-        7z a -tzip -mx=9 $GITHUB_WORKSPACE/local_linux_arm64.zip include lib
+        cd $GITHUB_WORKSPACE/static_arm64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/static_linux_arm64.zip include lib
+        
+        cd $GITHUB_WORKSPACE/dynamic_arm64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/dynamic_linux_arm64.zip include lib
 
     - name: Save artifacts
       uses: actions/upload-artifact@v4

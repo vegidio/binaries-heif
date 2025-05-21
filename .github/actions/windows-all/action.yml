@@ -1,4 +1,4 @@
-name: "windows-amd64"
+name: "windows-all"
 
 runs:
   using: composite
@@ -21,32 +21,41 @@ runs:
     - name: Install vcpkg
       shell: bash
       run: |
-        mkdir -p $GITHUB_WORKSPACE/local_amd64/lib
+        mkdir -p $GITHUB_WORKSPACE/static_x64/lib
+        mkdir -p $GITHUB_WORKSPACE/dynamic_x64/lib
         git clone https://github.com/microsoft/vcpkg builder
         ./builder/bootstrap-vcpkg.sh
-        cp vcpkg/windows-amd64-static.cmake builder/triplets/community
 
     - name: Build libheif
       shell: bash
       run: |
-        ./builder/vcpkg install "libheif[hevc]:windows-amd64-static"
+        ./builder/vcpkg install "libheif[hevc]:x64-mingw-static"
+        ./builder/vcpkg install "libheif[hevc]:x64-mingw-dynamic"
 
     - name: Prepare dependencies
       shell: bash
       run: |
-        cp -r $GITHUB_WORKSPACE/builder/installed/windows-amd64-static/include $GITHUB_WORKSPACE/local_amd64/
-        for file in "$GITHUB_WORKSPACE"/builder/installed/windows-amd64-static/lib/*.a; do
-          cp "$file" "$GITHUB_WORKSPACE/local_amd64/lib/"
+        cp -r $GITHUB_WORKSPACE/builder/installed/x64-mingw-static/include $GITHUB_WORKSPACE/static_x64/
+        for file in "$GITHUB_WORKSPACE"/builder/installed/x64-mingw-static/lib/*.a; do
+          cp "$file" "$GITHUB_WORKSPACE/static_x64/lib/"
+        done
+        
+        cp -r $GITHUB_WORKSPACE/builder/installed/x64-mingw-dynamic/include $GITHUB_WORKSPACE/dynamic_x64/
+        for file in "$GITHUB_WORKSPACE"/builder/installed/x64-mingw-dynamic/bin/*.dll; do
+          cp "$file" "$GITHUB_WORKSPACE/dynamic_x64/lib/"
         done
 
     - name: Zip local
       shell: bash
       run: |
-        cd $GITHUB_WORKSPACE/local_amd64
-        7z a -tzip -mx=9 $GITHUB_WORKSPACE/local_windows_amd64.zip include lib
+        cd $GITHUB_WORKSPACE/static_x64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/static_windows_x64.zip include lib
+        
+        cd $GITHUB_WORKSPACE/dynamic_x64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/dynamic_windows_x64.zip include lib
 
     - name: Save artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: binaries-windows-amd64
+        name: binaries-windows-x64
         path: "*.zip"

@@ -1,0 +1,50 @@
+name: "linux-x64"
+
+runs:
+  using: composite
+  steps:
+    - name: Code checkout
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        sudo apt-get install nasm
+        mkdir -p $GITHUB_WORKSPACE/static_x64/lib
+        mkdir -p $GITHUB_WORKSPACE/dynamic_x64/lib
+
+    - name: Install vcpkg
+      shell: bash
+      run: |
+        git clone https://github.com/microsoft/vcpkg builder
+        ./builder/bootstrap-vcpkg.sh
+
+    - name: Build libheif
+      shell: bash
+      run: |
+        ./builder/vcpkg install "libheif[hevc]:x64-linux"
+        ./builder/vcpkg install "libheif[hevc]:x64-linux-dynamic"
+
+    - name: Prepare dependencies
+      shell: bash
+      run: |
+        cp -r $GITHUB_WORKSPACE/builder/installed/x64-linux/include $GITHUB_WORKSPACE/static_x64/include
+        cp $GITHUB_WORKSPACE/builder/installed/x64-linux/lib/*.a $GITHUB_WORKSPACE/static_x64/lib/
+        
+        cp -r $GITHUB_WORKSPACE/builder/installed/x64-linux-dynamic/include $GITHUB_WORKSPACE/dynamic_x64/include
+        cp $GITHUB_WORKSPACE/builder/installed/x64-linux-dynamic/lib/*.so $GITHUB_WORKSPACE/dynamic_x64/lib/
+
+    - name: Zip local
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/static_x64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/static_linux_x64.zip include lib
+        
+        cd $GITHUB_WORKSPACE/dynamic_x64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/dynamic_linux_x64.zip include lib
+
+    - name: Save artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries-linux-x64
+        path: "*.zip"

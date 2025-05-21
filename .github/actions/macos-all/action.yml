@@ -14,40 +14,61 @@ runs:
         # Uninstalling jpeg-turbo to avoid conflicts with libheif's implementation of jpeg-turbo 
         brew uninstall --ignore-dependencies jpeg-turbo
         
-        mkdir -p $GITHUB_WORKSPACE/local_amd64/lib
-        mkdir -p $GITHUB_WORKSPACE/local_arm64/lib
+        mkdir -p $GITHUB_WORKSPACE/static_x64/lib
+        mkdir -p $GITHUB_WORKSPACE/dynamic_x64/lib
+        mkdir -p $GITHUB_WORKSPACE/static_arm64/lib
+        mkdir -p $GITHUB_WORKSPACE/dynamic_arm64/lib
 
     - name: Install vcpkg
       shell: bash
       run: |
         git clone https://github.com/microsoft/vcpkg builder
         ./builder/bootstrap-vcpkg.sh
-        cp vcpkg/darwin-amd64-static.cmake builder/triplets/community
-        cp vcpkg/darwin-arm64-static.cmake builder/triplets/community
 
     - name: Build libheif
       shell: bash
       run: |
-        ./builder/vcpkg install "libheif[hevc]:darwin-amd64-static"
-        ./builder/vcpkg install "libheif[hevc]:darwin-arm64-static"
+        ./builder/vcpkg install "libheif[hevc]:x64-osx"
+        ./builder/vcpkg install "libheif[hevc]:x64-osx-dynamic"
+        
+        ./builder/vcpkg install "libheif[hevc]:arm64-osx"
+        ./builder/vcpkg install "libheif[hevc]:arm64-osx-dynamic"
 
     - name: Prepare dependencies
       shell: bash
       run: |
-        cp -r $GITHUB_WORKSPACE/builder/installed/darwin-amd64-static/include $GITHUB_WORKSPACE/local_amd64/include
-        cp $GITHUB_WORKSPACE/builder/installed/darwin-amd64-static/lib/*.a $GITHUB_WORKSPACE/local_amd64/lib
+        cp -r $GITHUB_WORKSPACE/builder/installed/x64-osx/include $GITHUB_WORKSPACE/static_x64/include
+        cp $GITHUB_WORKSPACE/builder/installed/x64-osx/lib/*.a $GITHUB_WORKSPACE/static_x64/lib
         
-        cp -r $GITHUB_WORKSPACE/builder/installed/darwin-arm64-static/include $GITHUB_WORKSPACE/local_arm64/include
-        cp $GITHUB_WORKSPACE/builder/installed/darwin-arm64-static/lib/*.a $GITHUB_WORKSPACE/local_arm64/lib
+        cp -r $GITHUB_WORKSPACE/builder/installed/arm64-osx/include $GITHUB_WORKSPACE/static_arm64/include
+        cp $GITHUB_WORKSPACE/builder/installed/arm64-osx/lib/*.a $GITHUB_WORKSPACE/static_arm64/lib
+        
+        cp -r $GITHUB_WORKSPACE/builder/installed/x64-osx-dynamic/include $GITHUB_WORKSPACE/dynamic_x64/include
+        cp $GITHUB_WORKSPACE/builder/installed/x64-osx-dynamic/lib/libde265.dylib \
+          $GITHUB_WORKSPACE/builder/installed/x64-osx-dynamic/lib/libheif.dylib \
+          $GITHUB_WORKSPACE/builder/installed/x64-osx-dynamic/lib/libx265.dylib \
+          $GITHUB_WORKSPACE/dynamic_x64/lib
+        
+        cp -r $GITHUB_WORKSPACE/builder/installed/arm64-osx-dynamic/include $GITHUB_WORKSPACE/dynamic_arm64/include
+        cp $GITHUB_WORKSPACE/builder/installed/arm64-osx-dynamic/lib/libde265.dylib \
+          $GITHUB_WORKSPACE/builder/installed/arm64-osx-dynamic/lib/libheif.dylib \
+          $GITHUB_WORKSPACE/builder/installed/arm64-osx-dynamic/lib/libx265.dylib \
+          $GITHUB_WORKSPACE/dynamic_arm64/lib
 
     - name: Zip local
       shell: bash
       run: |
-        cd $GITHUB_WORKSPACE/local_amd64
-        7z a -tzip -mx=9 $GITHUB_WORKSPACE/local_darwin_amd64.zip include lib
+        cd $GITHUB_WORKSPACE/static_x64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/static_osx_x64.zip include lib
         
-        cd $GITHUB_WORKSPACE/local_arm64
-        7z a -tzip -mx=9 $GITHUB_WORKSPACE/local_darwin_arm64.zip include lib
+        cd $GITHUB_WORKSPACE/static_arm64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/static_osx_arm64.zip include lib
+        
+        cd $GITHUB_WORKSPACE/dynamic_x64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/dynamic_osx_x64.zip include lib
+        
+        cd $GITHUB_WORKSPACE/dynamic_arm64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/dynamic_osx_arm64.zip include lib
 
     - name: Save artifacts
       uses: actions/upload-artifact@v4
