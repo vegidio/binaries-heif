@@ -2,7 +2,7 @@
 
 A repository with static and dynamic binaries for libheif with HEVC support.
 
-It supports macOS (x64 & arm64), Linux (x64 & arm64) and Windows (x64).
+It offers x64 & arm64 versions for macOS, Linux and Windows.
 
 ## 👨🏾‍💻 Author
 

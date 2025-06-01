@@ -1,0 +1,68 @@
+name: "windows-all"
+
+runs:
+  using: composite
+  steps:
+    - name: Code checkout
+      uses: actions/checkout@v4
+
+    - name: Install NASM
+      uses: ilammy/setup-nasm@v1
+
+    - name: Install MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: CLANGARM64
+        update: true
+        install: |
+          mingw-w64-clang-aarch64-gcc-compat
+          mingw-w64-clang-aarch64-make
+
+    - name: Pin CMake 3.31.6-1 explicitly
+      shell: msys2 {0}
+      run: |
+        curl -L -o cmake-3.31.6-1.pkg.tar.zst \
+          https://repo.msys2.org/mingw/clangarm64/mingw-w64-clang-aarch64-cmake-3.31.6-1-any.pkg.tar.zst
+        pacman -U --noconfirm cmake-3.31.6-1.pkg.tar.zst
+
+    - name: Install vcpkg
+      shell: bash
+      run: |
+        mkdir -p $GITHUB_WORKSPACE/static_arm64/lib
+        mkdir -p $GITHUB_WORKSPACE/dynamic_arm64/lib
+        git clone https://github.com/microsoft/vcpkg builder
+        ./builder/bootstrap-vcpkg.sh
+
+    - name: Build libheif
+      shell: msys2 {0}
+      run: |
+        ./builder/vcpkg install "libheif[hevc]:arm64-mingw-static"
+        ./builder/vcpkg install "libheif[hevc]:arm64-mingw-dynamic"
+
+    - name: Prepare dependencies
+      shell: bash
+      run: |
+        cp -r $GITHUB_WORKSPACE/builder/installed/arm64-mingw-static/include $GITHUB_WORKSPACE/static_arm64/
+        for file in "$GITHUB_WORKSPACE"/builder/installed/arm64-mingw-static/lib/*.a; do
+          cp "$file" "$GITHUB_WORKSPACE/static_arm64/lib/"
+        done
+        
+        cp -r $GITHUB_WORKSPACE/builder/installed/arm64-mingw-dynamic/include $GITHUB_WORKSPACE/dynamic_arm64/
+        for file in "$GITHUB_WORKSPACE"/builder/installed/arm64-mingw-dynamic/bin/*.dll; do
+          cp "$file" "$GITHUB_WORKSPACE/dynamic_arm64/lib/"
+        done
+
+    - name: Zip local
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/static_arm64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/static_windows_arm64.zip include lib
+        
+        cd $GITHUB_WORKSPACE/dynamic_arm64
+        7z a -tzip -mx=9 $GITHUB_WORKSPACE/dynamic_windows_arm64.zip include lib
+
+    - name: Save artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries-windows-arm64
+        path: "*.zip"
