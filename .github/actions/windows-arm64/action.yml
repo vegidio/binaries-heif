@@ -1,11 +1,8 @@
-name: "windows-all"
+name: "windows-arm64"
 
 runs:
   using: composite
   steps:
-    - name: Code checkout
-      uses: actions/checkout@v4
-
     - name: Install NASM
       uses: ilammy/setup-nasm@v1
 
