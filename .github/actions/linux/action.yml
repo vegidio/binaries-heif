@@ -1,0 +1,61 @@
+name: "linux"
+
+inputs:
+  arch:
+    description: "Target architecture (x64 or arm64)"
+    required: true
+  triplet:
+    description: "vcpkg triplet (e.g. x64-linux); dynamic is <triplet>-dynamic"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install dependencies
+      shell: bash
+      run: |
+        sudo apt-get update && sudo apt-get install -y nasm
+        mkdir -p $GITHUB_WORKSPACE/static_${{ inputs.arch }}/lib
+        mkdir -p $GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}/lib
+
+    - name: Install vcpkg
+      shell: bash
+      run: |
+        git clone https://github.com/microsoft/vcpkg builder
+        ./builder/bootstrap-vcpkg.sh
+
+    - name: Build libheif
+      shell: bash
+      run: |
+        ./builder/vcpkg install "libheif[hevc]:${{ inputs.triplet }}"
+        ./builder/vcpkg install "libheif[hevc]:${{ inputs.triplet }}-dynamic"
+
+    - name: Prepare dependencies
+      shell: bash
+      run: |
+        cp -r $GITHUB_WORKSPACE/builder/installed/${{ inputs.triplet }}/include $GITHUB_WORKSPACE/static_${{ inputs.arch }}/include
+        cp $GITHUB_WORKSPACE/builder/installed/${{ inputs.triplet }}/lib/*.a $GITHUB_WORKSPACE/static_${{ inputs.arch }}/lib/
+
+        cp -r $GITHUB_WORKSPACE/builder/installed/${{ inputs.triplet }}-dynamic/include $GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}/include
+        # cp -a preserves the SONAME .so symlinks as links rather than copies.
+        cp -a $GITHUB_WORKSPACE/builder/installed/${{ inputs.triplet }}-dynamic/lib/*.so* $GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}/lib/
+
+    - name: Strip debug info
+      shell: bash
+      run: |
+        strip --strip-debug $GITHUB_WORKSPACE/static_${{ inputs.arch }}/lib/*.a
+
+    - name: Zip local
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/static_${{ inputs.arch }}
+        7z a -tzip -mx=9 -snl $GITHUB_WORKSPACE/static_linux_${{ inputs.arch }}.zip include lib
+
+        cd $GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}
+        7z a -tzip -mx=9 -snl $GITHUB_WORKSPACE/dynamic_linux_${{ inputs.arch }}.zip include lib
+
+    - name: Save artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries-linux-${{ inputs.arch }}
+        path: "*.zip"

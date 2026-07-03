@@ -1,0 +1,92 @@
+name: "windows"
+
+inputs:
+  arch:
+    description: "Target architecture (x64 or arm64)"
+    required: true
+  triplet-prefix:
+    description: "vcpkg triplet prefix (e.g. x64-windows); static is <prefix>-static-md, dynamic is <prefix>"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install NASM
+      uses: ilammy/setup-nasm@v1
+
+    - name: Install vcpkg
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = "Stop"
+        New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE/static_${{ inputs.arch }}/lib" | Out-Null
+        New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}/lib" | Out-Null
+        git clone https://github.com/microsoft/vcpkg builder
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & ./builder/bootstrap-vcpkg.bat
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Build libheif
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = "Stop"
+        & ./builder/vcpkg.exe install "libheif[hevc]:${{ inputs.triplet-prefix }}-static-md"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & ./builder/vcpkg.exe install "libheif[hevc]:${{ inputs.triplet-prefix }}"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: Prepare dependencies
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = "Stop"
+        $static = "$env:GITHUB_WORKSPACE/builder/installed/${{ inputs.triplet-prefix }}-static-md"
+        $dynamic = "$env:GITHUB_WORKSPACE/builder/installed/${{ inputs.triplet-prefix }}"
+
+        Copy-Item -Recurse -Force "$static/include" "$env:GITHUB_WORKSPACE/static_${{ inputs.arch }}/include"
+        Copy-Item -Force "$static/lib/*.lib" "$env:GITHUB_WORKSPACE/static_${{ inputs.arch }}/lib/"
+
+        Copy-Item -Recurse -Force "$dynamic/include" "$env:GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}/include"
+        Copy-Item -Force "$dynamic/bin/*.dll" "$env:GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}/lib/"
+        Copy-Item -Force "$dynamic/lib/*.lib" "$env:GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}/lib/"
+
+    - name: Strip debug info from libs
+      shell: pwsh
+      run: |
+        $objcopy = (Get-Command llvm-objcopy -ErrorAction SilentlyContinue).Source
+        if (-not $objcopy) { $objcopy = "C:\Program Files\LLVM\bin\llvm-objcopy.exe" }
+        if (-not (Test-Path $objcopy)) {
+          choco install llvm -y
+          $objcopy = "C:\Program Files\LLVM\bin\llvm-objcopy.exe"
+        }
+
+        # Some .lib archives (LTCG / anonymous objects) can't be parsed by llvm-objcopy;
+        # strip to a temp file and only swap it in on success, otherwise skip without failing.
+        $ErrorActionPreference = "Continue"
+        $PSNativeCommandUseErrorActionPreference = $false
+        Get-ChildItem "$env:GITHUB_WORKSPACE/static_${{ inputs.arch }}/lib" -Filter *.lib | ForEach-Object {
+          $src = $_.FullName
+          $tmp = "$src.stripped"
+          & $objcopy --strip-debug $src $tmp 2>$null
+          if ($LASTEXITCODE -eq 0 -and (Test-Path $tmp)) {
+            Move-Item -Force $tmp $src
+          } else {
+            if (Test-Path $tmp) { Remove-Item -Force $tmp }
+            Write-Host "skip (unsupported by llvm-objcopy): $($_.Name)"
+          }
+        }
+        exit 0
+
+    - name: Zip local
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = "Stop"
+        cd "$env:GITHUB_WORKSPACE/static_${{ inputs.arch }}"
+        7z a -tzip -mx=9 -snl "$env:GITHUB_WORKSPACE/static_windows_${{ inputs.arch }}.zip" include lib
+
+        cd "$env:GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}"
+        7z a -tzip -mx=9 -snl "$env:GITHUB_WORKSPACE/dynamic_windows_${{ inputs.arch }}.zip" include lib
+
+    - name: Save artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries-windows-${{ inputs.arch }}
+        path: "*.zip"

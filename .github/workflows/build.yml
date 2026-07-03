@@ -13,73 +13,114 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  version:
-    runs-on: ubuntu-latest
-    outputs:
-      VERSION: ${{ steps.vars.outputs.VERSION }}
-    steps:
-      # The `fetch-depth: 0` is important to fetch all the tags
-      - name: Code checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set version
-        id: vars
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-
   build-macos:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Intel macOS runners are scarce, so x64 is cross-compiled on the arm64
+          # runner (the x64-osx triplet sets VCPKG_OSX_ARCHITECTURES=x86_64).
+          - runner: macos-latest
+            arch: x64
+            triplet: x64-osx
+            deployment: "10.15"
+          - runner: macos-latest
+            arch: arm64
+            triplet: arm64-osx
+            deployment: "11.0"
+    runs-on: ${{ matrix.runner }}
     env:
-      MACOSX_DEPLOYMENT_TARGET: "10.15"
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment }}
     steps:
       - name: Code checkout
         uses: actions/checkout@v4
 
       - name: Create macOS binaries
-        uses: ./.github/actions/macos-all
+        uses: ./.github/actions/macos
+        with:
+          arch: ${{ matrix.arch }}
+          triplet: ${{ matrix.triplet }}
 
-  build-linux-x64:
-    runs-on: ubuntu-latest
+  build-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            arch: x64
+            triplet: x64-linux
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            triplet: arm64-linux
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Code checkout
         uses: actions/checkout@v4
 
-      - name: Create Linux AMD64 binaries
-        uses: ./.github/actions/linux-x64
+      - name: Create Linux binaries
+        uses: ./.github/actions/linux
+        with:
+          arch: ${{ matrix.arch }}
+          triplet: ${{ matrix.triplet }}
 
-  build-linux-arm64:
-    runs-on: ubuntu-24.04-arm
+  build-mingw:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x64
+            msystem: MINGW64
+            triplet-prefix: x64-mingw
+            packages: |
+              mingw-w64-x86_64-gcc
+              mingw-w64-x86_64-cmake
+              mingw-w64-x86_64-make
+          - runner: windows-11-arm
+            arch: arm64
+            msystem: CLANGARM64
+            triplet-prefix: arm64-mingw
+            packages: |
+              mingw-w64-clang-aarch64-gcc-compat
+              mingw-w64-clang-aarch64-make
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Code checkout
         uses: actions/checkout@v4
 
-      - name: Create Linux ARM64 binaries
-        uses: ./.github/actions/linux-arm64
+      - name: Create MinGW binaries
+        uses: ./.github/actions/mingw
+        with:
+          arch: ${{ matrix.arch }}
+          msystem: ${{ matrix.msystem }}
+          packages: ${{ matrix.packages }}
+          triplet-prefix: ${{ matrix.triplet-prefix }}
 
-  build-windows-x64:
-    runs-on: windows-latest
+  build-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x64
+            triplet-prefix: x64-windows
+          - runner: windows-11-arm
+            arch: arm64
+            triplet-prefix: arm64-windows
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Code checkout
         uses: actions/checkout@v4
 
       - name: Create Windows binaries
-        uses: ./.github/actions/windows-x64
-
-  build-windows-arm64:
-    runs-on: windows-11-arm
-    steps:
-      - name: Code checkout
-        uses: actions/checkout@v4
-
-      - name: Create Windows binaries
-        uses: ./.github/actions/windows-arm64
+        uses: ./.github/actions/windows
+        with:
+          arch: ${{ matrix.arch }}
+          triplet-prefix: ${{ matrix.triplet-prefix }}
 
   release:
     runs-on: ubuntu-latest
-    needs: [build-macos, build-linux-x64, build-linux-arm64, build-windows-x64, build-windows-arm64]
+    needs: [build-macos, build-linux, build-mingw, build-windows]
     permissions:
       contents: write
     steps:
@@ -92,8 +133,8 @@ jobs:
       - name: Create release
         uses: ncipollo/release-action@v1
         with:
-          name: ${{ needs.version.outputs.VERSION }}
-          tag: ${{ needs.version.outputs.VERSION }}
+          name: ${{ github.ref_name }}
+          tag: ${{ github.ref_name }}
           body: "New release"
           replacesArtifacts: true
           artifacts: binaries/*.zip

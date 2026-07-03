@@ -1,0 +1,85 @@
+name: "mingw"
+
+inputs:
+  arch:
+    description: "Target architecture (x64 or arm64)"
+    required: true
+  msystem:
+    description: "MSYS2 environment (e.g. MINGW64 or CLANGARM64)"
+    required: true
+  packages:
+    description: "MSYS2 packages to install"
+    required: true
+  triplet-prefix:
+    description: "vcpkg triplet prefix (e.g. x64-mingw); static is <prefix>-static, dynamic is <prefix>-dynamic"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install NASM
+      uses: ilammy/setup-nasm@v1
+
+    - name: Install MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: ${{ inputs.msystem }}
+        update: true
+        install: ${{ inputs.packages }}
+
+    # The latest CLANGARM64 CMake is broken for this build, so pin a known-good version.
+    - name: Pin CMake 3.31.6-1 explicitly
+      if: ${{ inputs.msystem == 'CLANGARM64' }}
+      shell: msys2 {0}
+      run: |
+        curl -L -o cmake-3.31.6-1.pkg.tar.zst \
+          https://repo.msys2.org/mingw/clangarm64/mingw-w64-clang-aarch64-cmake-3.31.6-1-any.pkg.tar.zst
+        pacman -U --noconfirm cmake-3.31.6-1.pkg.tar.zst
+
+    - name: Install vcpkg
+      shell: bash
+      run: |
+        mkdir -p $GITHUB_WORKSPACE/static_${{ inputs.arch }}/lib
+        mkdir -p $GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}/lib
+        git clone https://github.com/microsoft/vcpkg builder
+        ./builder/bootstrap-vcpkg.sh
+
+    - name: Build libheif
+      shell: msys2 {0}
+      run: |
+        ./builder/vcpkg install "libheif[hevc]:${{ inputs.triplet-prefix }}-static"
+        ./builder/vcpkg install "libheif[hevc]:${{ inputs.triplet-prefix }}-dynamic"
+
+    - name: Prepare dependencies
+      shell: bash
+      run: |
+        cp -r $GITHUB_WORKSPACE/builder/installed/${{ inputs.triplet-prefix }}-static/include $GITHUB_WORKSPACE/static_${{ inputs.arch }}/
+        for file in "$GITHUB_WORKSPACE"/builder/installed/${{ inputs.triplet-prefix }}-static/lib/*.a; do
+          cp "$file" "$GITHUB_WORKSPACE/static_${{ inputs.arch }}/lib/"
+        done
+
+        cp -r $GITHUB_WORKSPACE/builder/installed/${{ inputs.triplet-prefix }}-dynamic/include $GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}/
+        for file in "$GITHUB_WORKSPACE"/builder/installed/${{ inputs.triplet-prefix }}-dynamic/bin/*.dll; do
+          cp "$file" "$GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}/lib/"
+        done
+
+    - name: Strip debug info
+      shell: msys2 {0}
+      run: |
+        # Run under msys2 so the toolchain strip matches (GNU strip on MINGW64, llvm strip on CLANGARM64).
+        strip --strip-debug "$GITHUB_WORKSPACE"/static_${{ inputs.arch }}/lib/*.a
+
+    - name: Zip local
+      shell: bash
+      run: |
+        cd $GITHUB_WORKSPACE/static_${{ inputs.arch }}
+        7z a -tzip -mx=9 -snl $GITHUB_WORKSPACE/static_mingw_${{ inputs.arch }}.zip include lib
+
+        cd $GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}
+        7z a -tzip -mx=9 -snl $GITHUB_WORKSPACE/dynamic_mingw_${{ inputs.arch }}.zip include lib
+
+    - name: Save artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries-mingw-${{ inputs.arch }}
+        path: "*.zip"
