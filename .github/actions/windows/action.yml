@@ -65,7 +65,11 @@ runs:
         Get-ChildItem "$env:GITHUB_WORKSPACE/static_${{ inputs.arch }}/lib" -Filter *.lib | ForEach-Object {
           $src = $_.FullName
           $tmp = "$src.stripped"
-          & $objcopy --strip-debug $src $tmp 2>$null
+          # .chks64 is dropped too: it holds one checksum per section, by index, and MSVC's linker trusts it to
+          # decide which functions /OPT:ICF may fold. Stripping removes the .debug$* sections without updating it,
+          # so the checksums no longer match their sections and unrelated functions get folded together. Without
+          # it the linker compares the code itself.
+          & $objcopy --strip-debug --remove-section=.chks64 $src $tmp 2>$null
           if ($LASTEXITCODE -eq 0 -and (Test-Path $tmp)) {
             Move-Item -Force $tmp $src
           } else {
