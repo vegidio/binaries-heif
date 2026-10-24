@@ -54,6 +54,18 @@ runs:
         cd $GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}
         7z a -tzip -mx=9 -snl $GITHUB_WORKSPACE/dynamic_linux_${{ inputs.arch }}.zip include lib
 
+    - name: Install bundle tools
+      shell: bash
+      run: |
+        sudo apt-get install -y llvm
+
+    - name: Create bundle
+      shell: bash
+      run: |
+        bash $GITHUB_WORKSPACE/scripts/bundle.sh --os linux --arch ${{ inputs.arch }} \
+          --static-dir $GITHUB_WORKSPACE/static_${{ inputs.arch }} \
+          --output $GITHUB_WORKSPACE/bundle_linux_${{ inputs.arch }}.zip
+
     - name: Save artifacts
       uses: actions/upload-artifact@v4
       with:

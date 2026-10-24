@@ -78,6 +78,20 @@ runs:
         cd $GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}
         7z a -tzip -mx=9 -snl $GITHUB_WORKSPACE/dynamic_mingw_${{ inputs.arch }}.zip include lib
 
+    - name: Install bundle tools
+      shell: msys2 {0}
+      run: |
+        # mingw-w64-x86_64-llvm on MINGW64, mingw-w64-clang-aarch64-llvm on CLANGARM64.
+        pacman -S --noconfirm --needed "${MINGW_PACKAGE_PREFIX}-llvm"
+
+    - name: Create bundle
+      shell: msys2 {0}
+      run: |
+        # Run under msys2 so the link tests use the environment's own toolchain and runtime (as in the strip step).
+        bash scripts/bundle.sh --os mingw --arch ${{ inputs.arch }} \
+          --static-dir "$GITHUB_WORKSPACE/static_${{ inputs.arch }}" \
+          --output "$GITHUB_WORKSPACE/bundle_mingw_${{ inputs.arch }}.zip"
+
     - name: Save artifacts
       uses: actions/upload-artifact@v4
       with:

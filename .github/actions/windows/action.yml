@@ -89,6 +89,30 @@ runs:
         cd "$env:GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}"
         7z a -tzip -mx=9 -snl "$env:GITHUB_WORKSPACE/dynamic_windows_${{ inputs.arch }}.zip" include lib
 
+    - name: Locate bundle tools
+      shell: pwsh
+      run: |
+        # Same lookup as the strip step, which installs LLVM via choco when it's missing. Done before the MSVC
+        # environment is set up so that its PATH changes can't redirect it.
+        $objcopy = (Get-Command llvm-objcopy -ErrorAction SilentlyContinue).Source
+        if (-not $objcopy) { $objcopy = "C:\Program Files\LLVM\bin\llvm-objcopy.exe" }
+        if (-not (Test-Path $objcopy)) { throw "llvm-objcopy not found" }
+        "BUNDLE_LLVM_BIN=$(Split-Path $objcopy)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+    # Only for the system libraries and headers (LIB/INCLUDE) of the link tests; compiling and linking is done with
+    # clang-cl and lld-link.
+    - name: Set up MSVC environment
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: ${{ inputs.arch }}
+
+    - name: Create bundle
+      shell: bash
+      run: |
+        LLVM_BIN="$(cygpath -u "$BUNDLE_LLVM_BIN")" bash scripts/bundle.sh --os windows --arch ${{ inputs.arch }} \
+          --static-dir "$GITHUB_WORKSPACE/static_${{ inputs.arch }}" \
+          --output "$GITHUB_WORKSPACE/bundle_windows_${{ inputs.arch }}.zip"
+
     - name: Save artifacts
       uses: actions/upload-artifact@v4
       with:

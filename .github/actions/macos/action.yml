@@ -62,6 +62,19 @@ runs:
         cd $GITHUB_WORKSPACE/dynamic_${{ inputs.arch }}
         7z a -tzip -mx=9 -snl $GITHUB_WORKSPACE/dynamic_osx_${{ inputs.arch }}.zip include lib
 
+    - name: Install bundle tools
+      shell: bash
+      run: |
+        brew install llvm
+
+    - name: Create bundle
+      shell: bash
+      run: |
+        # brew's LLVM is keg-only: its tools are passed explicitly, cc/c++ stay Apple's.
+        LLVM_BIN="$(brew --prefix llvm)/bin" bash $GITHUB_WORKSPACE/scripts/bundle.sh --os osx --arch ${{ inputs.arch }} \
+          --static-dir $GITHUB_WORKSPACE/static_${{ inputs.arch }} \
+          --output $GITHUB_WORKSPACE/bundle_osx_${{ inputs.arch }}.zip
+
     - name: Save artifacts
       uses: actions/upload-artifact@v4
       with:
